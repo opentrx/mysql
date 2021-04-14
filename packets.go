@@ -797,10 +797,6 @@ func (rows *textRows) readRow(dest []driver.Value) error {
 		return err // err != nil
 	}
 
-	if pos == len(data) {
-		rows.rs.done = true
-	}
-
 	return nil
 }
 
