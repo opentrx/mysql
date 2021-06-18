@@ -139,7 +139,7 @@ func (resourceManager DataSourceManager) BranchRollback(branchType meta.BranchTy
 	defer conn.Close()
 	if err != nil {
 		log.Error(err)
-		return meta.BranchStatusPhasetwoCommitFailedRetryable, nil
+		return meta.BranchStatusPhasetwoRollbackFailedRetryable, nil
 	}
 	c := conn.(*mysqlConn)
 	err = undoLogManager.Undo(c, xid, branchID, db.cfg.DBName)
@@ -147,7 +147,7 @@ func (resourceManager DataSourceManager) BranchRollback(branchType meta.BranchTy
 		log.Errorf("[stacktrace]branchRollback failed. branchType:[%d], xid:[%s], branchID:[%d], resourceID:[%s], applicationData:[%v]",
 			branchType, xid, branchID, resourceID, applicationData)
 		log.Error(err)
-		return meta.BranchStatusPhasetwoCommitFailedRetryable, nil
+		return meta.BranchStatusPhasetwoRollbackFailedRetryable, nil
 	}
 	return meta.BranchStatusPhasetwoRollbacked, nil
 }
