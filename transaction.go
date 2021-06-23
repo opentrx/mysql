@@ -9,7 +9,6 @@
 package mysql
 
 import (
-	"github.com/transaction-wg/seata-golang/pkg/util/log"
 	"strings"
 	"time"
 )
@@ -18,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/transaction-wg/seata-golang/pkg/base/meta"
 	"github.com/transaction-wg/seata-golang/pkg/client/config"
+	"github.com/transaction-wg/seata-golang/pkg/util/log"
 )
 
 type mysqlTx struct {
@@ -40,7 +40,9 @@ func (tx *mysqlTx) Commit() (err error) {
 		branchID, err := tx.register()
 		if err != nil {
 			rollBackErr := tx.Rollback()
-			log.Error(rollBackErr)
+			if rollBackErr != nil {
+				log.Error(rollBackErr)
+			}
 			return err
 		}
 		tx.mc.ctx.branchID = branchID
