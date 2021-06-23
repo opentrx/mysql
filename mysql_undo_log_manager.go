@@ -64,7 +64,6 @@ func (manager MysqlUndoLogManager) FlushUndoLogs(conn *mysqlConn) error {
 
 	parser := GetUndoLogParser()
 	undoLogContent := parser.Encode(branchUndoLog)
-	fmt.Printf("Flushing UNDO LOG: %s", string(undoLogContent))
 
 	return manager.insertUndoLogWithNormal(conn, xid, branchID, buildContext(parser.GetName()), undoLogContent)
 }

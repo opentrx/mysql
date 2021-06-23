@@ -9,6 +9,7 @@
 package mysql
 
 import (
+	"github.com/transaction-wg/seata-golang/pkg/util/log"
 	"strings"
 	"time"
 )
@@ -38,27 +39,28 @@ func (tx *mysqlTx) Commit() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			err = tx.Rollback()
-			return errors.WithStack(err)
+			rollBackErr := tx.Rollback()
+			log.Error(rollBackErr)
+			return err
 		}
 		tx.mc.ctx.branchID = branchID
 
 		if len(tx.mc.ctx.sqlUndoItemsBuffer) > 0 {
 			err = GetUndoLogManager().FlushUndoLogs(tx.mc)
 			if err != nil {
-				err1 := tx.report(false)
-				if err1 != nil {
-					return errors.WithStack(err1)
+				reportErr := tx.report(false)
+				if reportErr != nil {
+					return reportErr
 				}
-				return errors.WithStack(err)
+				return err
 			}
 			err = tx.mc.exec("COMMIT")
 			if err != nil {
-				err1 := tx.report(false)
-				if err1 != nil {
-					return errors.WithStack(err1)
+				reportErr := tx.report(false)
+				if reportErr != nil {
+					return reportErr
 				}
-				return errors.WithStack(err)
+				return err
 			}
 		} else {
 			err = tx.mc.exec("COMMIT")
@@ -87,7 +89,7 @@ func (tx *mysqlTx) Rollback() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 		tx.mc.ctx.branchID = branchID
 		tx.report(false)
