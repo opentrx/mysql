@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"reflect"
 	"time"
-)
 
-import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"vimagination.zapto.org/byteio"
-)
 
-import (
 	"github.com/opentrx/mysql/schema"
 )
 

@@ -12,6 +12,8 @@ import (
 	"context"
 	"database/sql/driver"
 	"net"
+
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
 )
 
 type connector struct {
@@ -143,4 +145,12 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 // Driver returns &MySQLDriver{}.
 func (c *connector) Driver() driver.Driver {
 	return &MySQLDriver{}
+}
+
+func (c *connector) GetResourceID() string {
+	return c.cfg.DBName
+}
+
+func (c *connector) GetBranchType() apis.BranchSession_BranchType {
+	return apis.AT
 }

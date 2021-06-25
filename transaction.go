@@ -9,14 +9,16 @@
 package mysql
 
 import (
+	"context"
 	"strings"
 	"time"
-)
 
-import (
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/base/exception"
+	"github.com/opentrx/seata-golang/v2/pkg/client/config"
+	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 	"github.com/pkg/errors"
-	"github.com/transaction-wg/seata-golang/pkg/base/meta"
-	"github.com/transaction-wg/seata-golang/pkg/client/config"
 )
 
 type mysqlTx struct {
@@ -38,27 +40,28 @@ func (tx *mysqlTx) Commit() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			err = tx.Rollback()
-			return errors.WithStack(err)
+			rollbackErr := tx.Rollback()
+			log.Error(rollbackErr)
+			return err
 		}
 		tx.mc.ctx.branchID = branchID
 
 		if len(tx.mc.ctx.sqlUndoItemsBuffer) > 0 {
 			err = GetUndoLogManager().FlushUndoLogs(tx.mc)
 			if err != nil {
-				err1 := tx.report(false)
-				if err1 != nil {
-					return errors.WithStack(err1)
+				reportErr := tx.report(false)
+				if reportErr != nil {
+					return reportErr
 				}
-				return errors.WithStack(err)
+				return err
 			}
 			err = tx.mc.exec("COMMIT")
 			if err != nil {
-				err1 := tx.report(false)
-				if err1 != nil {
-					return errors.WithStack(err1)
+				reportErr := tx.report(false)
+				if reportErr != nil {
+					return reportErr
 				}
-				return errors.WithStack(err)
+				return err
 			}
 		} else {
 			err = tx.mc.exec("COMMIT")
@@ -87,7 +90,7 @@ func (tx *mysqlTx) Rollback() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 		tx.mc.ctx.branchID = branchID
 		tx.report(false)
@@ -99,15 +102,16 @@ func (tx *mysqlTx) register() (int64, error) {
 	var branchID int64
 	var err error
 	for retryCount := 0; retryCount < config.GetATConfig().LockRetryTimes; retryCount++ {
-		branchID, err = dataSourceManager.BranchRegister(meta.BranchTypeAT, tx.mc.cfg.DBName, "", tx.mc.ctx.xid,
-			nil, strings.Join(tx.mc.ctx.lockKeys, ";"))
+		branchID, err = rm.GetResourceManager().BranchRegister(context.Background(),
+			tx.mc.ctx.xid, tx.mc.cfg.DBName, apis.AT, nil,
+			strings.Join(tx.mc.ctx.lockKeys, ";"))
 		if err == nil {
 			break
 		}
 		errLog.Print("branch register err: %v", err)
-		var tex *meta.TransactionException
+		var tex *exception.TransactionException
 		if errors.As(err, &tex) {
-			if tex.Code == meta.TransactionExceptionCodeGlobalTransactionNotExist {
+			if tex.Code == apis.GlobalTransactionNotExist {
 				break
 			}
 		}
@@ -121,11 +125,11 @@ func (tx *mysqlTx) report(commitDone bool) error {
 	for retry > 0 {
 		var err error
 		if commitDone {
-			err = dataSourceManager.BranchReport(meta.BranchTypeAT, tx.mc.ctx.xid, tx.mc.ctx.branchID,
-				meta.BranchStatusPhaseoneDone, nil)
+			err = rm.GetResourceManager().BranchReport(context.Background(),
+				tx.mc.ctx.xid, tx.mc.ctx.branchID, apis.AT, apis.PhaseOneDone, nil)
 		} else {
-			err = dataSourceManager.BranchReport(meta.BranchTypeAT, tx.mc.ctx.xid, tx.mc.ctx.branchID,
-				meta.BranchStatusPhaseoneFailed, nil)
+			err = rm.GetResourceManager().BranchReport(context.Background(),
+				tx.mc.ctx.xid, tx.mc.ctx.branchID, apis.AT, apis.PhaseOneFailed, nil)
 		}
 		if err != nil {
 			errLog.Print("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",

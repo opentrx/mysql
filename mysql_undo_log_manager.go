@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
-)
 
-import (
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
@@ -64,7 +63,6 @@ func (manager MysqlUndoLogManager) FlushUndoLogs(conn *mysqlConn) error {
 
 	parser := GetUndoLogParser()
 	undoLogContent := parser.Encode(branchUndoLog)
-	fmt.Printf("Flushing UNDO LOG: %s", string(undoLogContent))
 
 	return manager.insertUndoLogWithNormal(conn, xid, branchID, buildContext(parser.GetName()), undoLogContent)
 }
@@ -142,9 +140,9 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 		_, err := conn.execAlways(DeleteUndoLogSql, args)
 		if err != nil {
 			tx.Rollback()
-			return errors.WithStack(err)
+			return err
 		}
-		fmt.Printf("xid %s branch %d, undo_log deleted with %s", xid, branchID,
+		log.Infof("xid %s branch %d, undo_log deleted with %s\n", xid, branchID,
 			GlobalFinished.String())
 		tx.Commit()
 	} else {
@@ -159,10 +157,11 @@ func (manager MysqlUndoLogManager) DeleteUndoLog(conn *mysqlConn, xid string, br
 	args := []driver.Value{xid, branchID}
 	result, err := conn.execAlways(DeleteUndoLogSql, args)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	affectCount, _ := result.RowsAffected()
-	fmt.Printf("%d undo log deleted by xid:%s and branchID:%d", affectCount, xid, branchID)
+	log.Infof("%d undo log deleted by xid:%s and branchID:%d\n", affectCount, xid, branchID)
 	return nil
 }
 
@@ -182,6 +181,7 @@ func (manager MysqlUndoLogManager) BatchDeleteUndoLog(conn *mysqlConn, xids []st
 	}
 	result, err := conn.execAlways(batchDeleteSql, args)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	affectCount, _ := result.RowsAffected()

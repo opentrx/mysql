@@ -14,13 +14,11 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-)
 
-import (
+	"github.com/opentrx/seata-golang/v2/pkg/client/config"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	_ "github.com/pingcap/parser/test_driver"
-	"github.com/transaction-wg/seata-golang/pkg/client/config"
 )
 
 type mysqlStmt struct {

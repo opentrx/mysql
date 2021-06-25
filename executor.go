@@ -1,22 +1,20 @@
 package mysql
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"strings"
 	"time"
-)
 
-import (
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
+	"github.com/opentrx/seata-golang/v2/pkg/util/mysql"
+	sql2 "github.com/opentrx/seata-golang/v2/pkg/util/sql"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
-	"github.com/transaction-wg/seata-golang/pkg/base/meta"
-	"github.com/transaction-wg/seata-golang/pkg/util/mysql"
-	sql2 "github.com/transaction-wg/seata-golang/pkg/util/sql"
-)
 
-import (
 	"github.com/opentrx/mysql/schema"
 )
 
@@ -334,8 +332,8 @@ func (executor *selectForUpdateExecutor) Execute(lockRetryInterval time.Duration
 			var lockable bool
 			var err error
 			for i := 0; i < lockRetryTimes; i++ {
-				lockable, err = dataSourceManager.LockQuery(meta.BranchTypeAT,
-					executor.mc.cfg.DBName, executor.mc.ctx.xid, lockKeys)
+				lockable, err = rm.GetResourceManager().LockQuery(context.Background(),
+					executor.mc.ctx.xid, executor.mc.cfg.DBName, apis.AT, lockKeys )
 				if lockable && err == nil {
 					break
 				}
@@ -540,6 +538,9 @@ func buildRecords(meta schema.TableMeta, rows driver.Rows) *schema.TableRecords 
 		}
 		row := &schema.Row{Fields: fields}
 		rs = append(rs, row)
+	}
+	if len(rs) == 0 {
+		return nil
 	}
 	records.Rows = rs
 	return records

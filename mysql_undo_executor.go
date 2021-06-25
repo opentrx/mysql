@@ -5,15 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-)
 
-import (
 	"github.com/google/go-cmp/cmp"
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 	"github.com/pkg/errors"
-	"github.com/transaction-wg/seata-golang/pkg/util/log"
-)
 
-import (
 	"github.com/opentrx/mysql/schema"
 )
 
@@ -165,7 +161,6 @@ func (executor MysqlUndoExecutor) dataValidationAndGoOn(conn *mysqlConn) (bool, 
 	}
 	beforeEqualsAfterResult := cmp.Equal(executor.sqlUndoLog.BeforeImage, executor.sqlUndoLog.AfterImage)
 	if beforeEqualsAfterResult {
-		log.Info("Stop rollback because there is no data change between the before data snapshot and the after data snapshot.")
 		return false, nil
 	}
 	currentRecords, err := executor.queryCurrentRecords(conn)
@@ -178,7 +173,6 @@ func (executor MysqlUndoExecutor) dataValidationAndGoOn(conn *mysqlConn) (bool, 
 		// data, too. No need continue to undo if current data is equivalent to the before data snapshot
 		beforeEqualsCurrentResult := cmp.Equal(executor.sqlUndoLog.BeforeImage, currentRecords)
 		if beforeEqualsCurrentResult {
-			log.Info("Stop rollback because there is no data change between the before data snapshot and the after data snapshot.")
 			return false, nil
 		} else {
 			oldRows, _ := json.Marshal(executor.sqlUndoLog.AfterImage.Rows)

@@ -3,40 +3,34 @@ package mysql
 import (
 	"context"
 	"fmt"
-	"strings"
-)
+	"sync"
 
-import (
-	"github.com/pkg/errors"
-)
-
-import (
-	"github.com/transaction-wg/seata-golang/pkg/base/meta"
-	"github.com/transaction-wg/seata-golang/pkg/base/protocal"
-	"github.com/transaction-wg/seata-golang/pkg/client/config"
-	"github.com/transaction-wg/seata-golang/pkg/client/rpc_client"
-	"github.com/transaction-wg/seata-golang/pkg/util/log"
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/base/model"
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 )
 
 var (
 	DBKEYS_SPLIT_CHAR = ","
 )
 
-type DataSourceManager struct {
-	RpcClient     *rpc_client.RpcRemoteClient
-	ResourceCache map[string]*connector
-}
-
 var dataSourceManager DataSourceManager
 
-func InitDataResourceManager() {
+type DataSourceManager struct {
+	ResourceCache map[string]*connector
+	connections map[string]*mysqlConn
+	sync.Mutex
+}
+
+func init() {
 	dataSourceManager = DataSourceManager{
-		RpcClient:     rpc_client.GetRpcRemoteClient(),
 		ResourceCache: make(map[string]*connector),
+		connections:   make(map[string]*mysqlConn),
 	}
-	go dataSourceManager.handleRegisterRM()
-	go dataSourceManager.handleBranchCommit()
-	go dataSourceManager.handleBranchRollback()
+}
+
+func GetDataSourceManager() DataSourceManager {
+	return dataSourceManager
 }
 
 func RegisterResource(dsn string) {
@@ -50,224 +44,118 @@ func RegisterResource(dsn string) {
 	}
 }
 
-func (resourceManager DataSourceManager) BranchRegister(branchType meta.BranchType, resourceID string,
-	clientID string, xid string, applicationData []byte, lockKeys string) (int64, error) {
-	request := protocal.BranchRegisterRequest{
-		XID:             xid,
-		BranchType:      branchType,
-		ResourceID:      resourceID,
-		LockKey:         lockKeys,
-		ApplicationData: applicationData,
+func (resourceManager DataSourceManager) GetConnection(resourceID string) *mysqlConn {
+	conn, ok := resourceManager.connections[resourceID]
+	if ok && conn.IsValid() {
+		return conn
 	}
-	resp, err := resourceManager.RpcClient.SendMsgWithResponse(request)
+	resourceManager.Lock()
+	defer resourceManager.Unlock()
+	conn, ok = resourceManager.connections[resourceID]
+	if ok && conn.IsValid() {
+		return conn
+	}
+	db := resourceManager.ResourceCache[resourceID]
+	connection, err := db.Connect(context.Background())
 	if err != nil {
-		return 0, errors.WithStack(err)
+		log.Error(err)
 	}
-	response := resp.(protocal.BranchRegisterResponse)
-	if response.ResultCode == protocal.ResultCodeSuccess {
-		return response.BranchID, nil
-	} else {
-		return 0, response.GetError()
-	}
+	conn = connection.(*mysqlConn)
+	resourceManager.connections[resourceID] = conn
+	return conn
 }
 
-func (resourceManager DataSourceManager) BranchReport(branchType meta.BranchType, xid string, branchID int64,
-	status meta.BranchStatus, applicationData []byte) error {
-	request := protocal.BranchReportRequest{
-		XID:             xid,
-		BranchID:        branchID,
-		Status:          status,
-		ApplicationData: applicationData,
+func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, request *apis.BranchCommitRequest) (*apis.BranchCommitResponse, error) {
+	db := resourceManager.ResourceCache[request.ResourceID]
+	if db == nil {
+		log.Errorf("Data resource is not exist, resourceID: %s", request.ResourceID)
+		return &apis.BranchCommitResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    fmt.Sprintf("Data resource is not exist, resourceID: %s", request.ResourceID),
+		}, nil
 	}
-	resp, err := resourceManager.RpcClient.SendMsgWithResponse(request)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	response := resp.(protocal.BranchReportResponse)
-	if response.ResultCode == protocal.ResultCodeFailed {
-		return response.GetError()
-	}
-	return nil
-}
 
-func (resourceManager DataSourceManager) LockQuery(branchType meta.BranchType, resourceID string, xid string,
-	lockKeys string) (bool, error) {
-	request := protocal.GlobalLockQueryRequest{
-		BranchRegisterRequest: protocal.BranchRegisterRequest{
-			XID:        xid,
-			ResourceID: resourceID,
-			LockKey:    lockKeys,
-		}}
-
-	var response protocal.GlobalLockQueryResponse
-	resp, err := resourceManager.RpcClient.SendMsgWithResponse(request)
-	if err != nil {
-		return false, errors.WithStack(err)
-	}
-	response = resp.(protocal.GlobalLockQueryResponse)
-
-	if response.ResultCode == protocal.ResultCodeFailed {
-		return false, errors.Errorf("Response[ %s ]", response.Msg)
-	}
-	return response.Lockable, nil
-}
-
-func (resourceManager DataSourceManager) BranchCommit(branchType meta.BranchType, xid string, branchID int64,
-	resourceID string, applicationData []byte) (meta.BranchStatus, error) {
 	//todo 改为异步批量操作
 	undoLogManager := GetUndoLogManager()
-	db := resourceManager.getDB(resourceID)
-	conn, err := db.Connect(context.Background())
-	defer conn.Close()
-	if err != nil {
-		return 0, errors.WithStack(err)
+	conn := resourceManager.GetConnection(request.ResourceID)
+
+	if conn == nil || !conn.IsValid() {
+		return &apis.BranchCommitResponse{
+			ResultCode:    apis.ResultCodeFailed,
+			Message:       "Connection is not valid",
+		}, nil
 	}
-	c := conn.(*mysqlConn)
-	err = undoLogManager.DeleteUndoLog(c, xid, branchID)
+	err := undoLogManager.DeleteUndoLog(conn, request.XID, request.BranchID)
 	if err != nil {
-		return 0, errors.WithStack(err)
+		log.Errorf("[stacktrace]branchCommit failed. xid:[%s], branchID:[%d], resourceID:[%s], branchType:[%d], applicationData:[%v]",
+			request.XID, request.BranchID, request.ResourceID, request.BranchType, request.ApplicationData)
+		log.Error(err)
+		return &apis.BranchCommitResponse{
+			ResultCode:    apis.ResultCodeFailed,
+			Message:       err.Error(),
+		}, nil
 	}
-	return meta.BranchStatusPhasetwoCommitted, nil
+	return &apis.BranchCommitResponse{
+		ResultCode:   apis.ResultCodeSuccess,
+		XID:          request.XID,
+		BranchID:     request.BranchID,
+		BranchStatus: apis.PhaseTwoCommitted,
+	}, nil
 }
 
-func (resourceManager DataSourceManager) BranchRollback(branchType meta.BranchType, xid string, branchID int64,
-	resourceID string, applicationData []byte) (meta.BranchStatus, error) {
+func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, request *apis.BranchRollbackRequest) (*apis.BranchRollbackResponse, error) {
+	db := resourceManager.ResourceCache[request.ResourceID]
+	if db == nil {
+		return &apis.BranchRollbackResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    fmt.Sprintf("Data resource is not exist, resourceID: %s", request.ResourceID),
+		}, nil
+	}
+
 	//todo 使用前镜数据覆盖当前数据
 	undoLogManager := GetUndoLogManager()
-	db := resourceManager.getDB(resourceID)
 	conn, err := db.Connect(context.Background())
 	defer conn.Close()
 	if err != nil {
 		log.Error(err)
-		return meta.BranchStatusPhasetwoCommitFailedRetryable, nil
+		return &apis.BranchRollbackResponse{
+			ResultCode:   apis.ResultCodeSuccess,
+			XID:          request.XID,
+			BranchID:     request.BranchID,
+			BranchStatus: apis.PhaseTwoRollbackFailedRetryable,
+		}, nil
 	}
 	c := conn.(*mysqlConn)
-	err = undoLogManager.Undo(c, xid, branchID, db.cfg.DBName)
+	err = undoLogManager.Undo(c, request.XID, request.BranchID, db.cfg.DBName)
 	if err != nil {
-		log.Errorf("[stacktrace]branchRollback failed. branchType:[%d], xid:[%s], branchID:[%d], resourceID:[%s], applicationData:[%v]",
-			branchType, xid, branchID, resourceID, applicationData)
+		log.Errorf("[stacktrace]branchRollback failed. xid:[%s], branchID:[%d], resourceID:[%s], branchType:[%d], applicationData:[%v]",
+			request.XID, request.BranchID, request.ResourceID, request.BranchType, request.ApplicationData)
 		log.Error(err)
-		return meta.BranchStatusPhasetwoCommitFailedRetryable, nil
+		return &apis.BranchRollbackResponse{
+			ResultCode:   apis.ResultCodeSuccess,
+			XID:          request.XID,
+			BranchID:     request.BranchID,
+			BranchStatus: apis.PhaseTwoRollbackFailedRetryable,
+		}, nil
 	}
-	return meta.BranchStatusPhasetwoRollbacked, nil
+	return &apis.BranchRollbackResponse{
+		ResultCode:   apis.ResultCodeSuccess,
+		XID:          request.XID,
+		BranchID:     request.BranchID,
+		BranchStatus: apis.PhaseTwoRolledBack,
+	}, nil
 }
 
-func (resourceManager DataSourceManager) GetBranchType() meta.BranchType {
-	return meta.BranchTypeAT
-}
-
-func (resourceManager DataSourceManager) getDB(resourceID string) *connector {
-	resource := resourceManager.ResourceCache[resourceID]
-	return resource
-}
-
-func (resourceManager DataSourceManager) handleRegisterRM() {
-	for {
-		serverAddress := <-resourceManager.RpcClient.GettySessionOnOpenChannel
-		resourceManager.doRegisterResource(serverAddress)
-	}
-}
-
-func (resourceManager DataSourceManager) handleBranchCommit() {
-	for {
-		rpcRMMessage := <-resourceManager.RpcClient.BranchCommitRequestChannel
-		rpcMessage := rpcRMMessage.RpcMessage
-		serviceAddress := rpcRMMessage.ServerAddress
-
-		req := rpcMessage.Body.(protocal.BranchCommitRequest)
-		resp := resourceManager.doBranchCommit(req)
-		resourceManager.RpcClient.SendResponse(rpcMessage, serviceAddress, resp)
+func (resourceManager DataSourceManager) RegisterResource(resource model.Resource) {
+	if connector,ok := resource.(*connector); ok {
+		resourceManager.ResourceCache[resource.GetResourceID()] = connector
 	}
 }
 
-func (resourceManager DataSourceManager) handleBranchRollback() {
-	for {
-		rpcRMMessage := <-resourceManager.RpcClient.BranchRollbackRequestChannel
-		rpcMessage := rpcRMMessage.RpcMessage
-		serviceAddress := rpcRMMessage.ServerAddress
-
-		req := rpcMessage.Body.(protocal.BranchRollbackRequest)
-		resp := resourceManager.doBranchRollback(req)
-		resourceManager.RpcClient.SendResponse(rpcMessage, serviceAddress, resp)
-	}
+func (resourceManager DataSourceManager) UnregisterResource(resource model.Resource) {
+	delete(resourceManager.ResourceCache, resource.GetResourceID())
 }
 
-func (resourceManager DataSourceManager) doRegisterResource(serverAddress string) {
-	if resourceManager.ResourceCache == nil || len(resourceManager.ResourceCache) == 0 {
-		return
-	}
-	message := protocal.RegisterRMRequest{
-		AbstractIdentifyRequest: protocal.AbstractIdentifyRequest{
-			Version:                 config.GetClientConfig().SeataVersion,
-			ApplicationID:           config.GetClientConfig().ApplicationID,
-			TransactionServiceGroup: config.GetClientConfig().TransactionServiceGroup,
-		},
-		ResourceIDs: resourceManager.getMergedResourceKeys(),
-	}
-
-	resourceManager.RpcClient.RegisterResource(serverAddress, message)
-}
-
-func (resourceManager DataSourceManager) getMergedResourceKeys() string {
-	var builder strings.Builder
-	if resourceManager.ResourceCache != nil && len(resourceManager.ResourceCache) > 0 {
-		for key, _ := range resourceManager.ResourceCache {
-			builder.WriteString(key)
-			builder.WriteString(DBKEYS_SPLIT_CHAR)
-		}
-		resourceKeys := builder.String()
-		resourceKeys = resourceKeys[:len(resourceKeys)-1]
-		return resourceKeys
-	}
-	return ""
-}
-
-func (resourceManager DataSourceManager) doBranchCommit(request protocal.BranchCommitRequest) protocal.BranchCommitResponse {
-	var resp = protocal.BranchCommitResponse{}
-
-	log.Infof("Branch committing: %s %d %s %s", request.XID, request.BranchID, request.ResourceID, request.ApplicationData)
-	status, err := resourceManager.BranchCommit(request.BranchType, request.XID, request.BranchID, request.ResourceID, request.ApplicationData)
-	if err != nil {
-		resp.ResultCode = protocal.ResultCodeFailed
-		var trxException *meta.TransactionException
-		if errors.As(err, &trxException) {
-			resp.TransactionExceptionCode = trxException.Code
-			resp.Msg = fmt.Sprintf("TransactionException[%s]", err.Error())
-			log.Errorf("Catch TransactionException while do RPC, request: %v", request)
-			return resp
-		}
-		resp.Msg = fmt.Sprintf("RuntimeException[%s]", err.Error())
-		log.Errorf("Catch RuntimeException while do RPC, request: %v", request)
-		return resp
-	}
-	resp.XID = request.XID
-	resp.BranchID = request.BranchID
-	resp.BranchStatus = status
-	resp.ResultCode = protocal.ResultCodeSuccess
-	return resp
-}
-
-func (resourceManager DataSourceManager) doBranchRollback(request protocal.BranchRollbackRequest) protocal.BranchRollbackResponse {
-	var resp = protocal.BranchRollbackResponse{}
-
-	log.Infof("Branch rollbacking: %s %d %s", request.XID, request.BranchID, request.ResourceID)
-	status, err := resourceManager.BranchRollback(request.BranchType, request.XID, request.BranchID, request.ResourceID, request.ApplicationData)
-	if err != nil {
-		resp.ResultCode = protocal.ResultCodeFailed
-		var trxException *meta.TransactionException
-		if errors.As(err, &trxException) {
-			resp.TransactionExceptionCode = trxException.Code
-			resp.Msg = fmt.Sprintf("TransactionException[%s]", err.Error())
-			log.Errorf("Catch TransactionException while do RPC, request: %v", request)
-			return resp
-		}
-		resp.Msg = fmt.Sprintf("RuntimeException[%s]", err.Error())
-		log.Errorf("Catch RuntimeException while do RPC, request: %v", request)
-		return resp
-	}
-	resp.XID = request.XID
-	resp.BranchID = request.BranchID
-	resp.BranchStatus = status
-	resp.ResultCode = protocal.ResultCodeSuccess
-	return resp
+func (resourceManager DataSourceManager) GetBranchType() apis.BranchSession_BranchType {
+	return apis.AT
 }
