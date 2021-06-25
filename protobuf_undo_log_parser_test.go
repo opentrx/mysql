@@ -3,14 +3,10 @@ package mysql
 import (
 	"fmt"
 	"testing"
-)
 
-import (
 	"github.com/go-playground/assert/v2"
-)
 
-import (
-	"github.com/opentrx/mysql/schema"
+	"github.com/opentrx/mysql/v2/schema"
 )
 
 func getBranchUndoLog() *branchUndoLog {

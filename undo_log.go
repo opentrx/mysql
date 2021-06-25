@@ -1,7 +1,7 @@
 package mysql
 
 import (
-	"github.com/opentrx/mysql/schema"
+	"github.com/opentrx/mysql/v2/schema"
 )
 
 type sqlUndoLog struct {

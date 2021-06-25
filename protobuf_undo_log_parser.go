@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"vimagination.zapto.org/byteio"
 
-	"github.com/opentrx/mysql/schema"
+	"github.com/opentrx/mysql/v2/schema"
 )
 
 type ProtoBufUndoLogParser struct {

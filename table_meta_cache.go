@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
-)
 
-import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
-)
 
-import (
-	"github.com/opentrx/mysql/schema"
+	"github.com/opentrx/mysql/v2/schema"
 )
 
 var EXPIRE_TIME = 15 * time.Minute
