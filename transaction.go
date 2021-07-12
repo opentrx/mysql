@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrx/seata-golang/v2/pkg/apis"
-	"github.com/opentrx/seata-golang/v2/pkg/client/base/exception"
-	"github.com/opentrx/seata-golang/v2/pkg/client/config"
-	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
-	"github.com/opentrx/seata-golang/v2/pkg/util/log"
+	"github.com/dk-lockdown/harmonia/pkg/apis"
+	"github.com/dk-lockdown/harmonia/pkg/client/base/exception"
+	"github.com/dk-lockdown/harmonia/pkg/client/config"
+	"github.com/dk-lockdown/harmonia/pkg/client/rm"
+	"github.com/dk-lockdown/harmonia/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
@@ -40,7 +40,7 @@ func (tx *mysqlTx) Commit() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			rollbackErr := tx.Rollback()
+			rollbackErr := tx.mc.exec("ROLLBACK")
 			log.Error(rollbackErr)
 			return err
 		}
@@ -108,7 +108,7 @@ func (tx *mysqlTx) register() (int64, error) {
 		if err == nil {
 			break
 		}
-		errLog.Print("branch register err: %v", err)
+		log.Errorf("branch register err: %v", err)
 		var tex *exception.TransactionException
 		if errors.As(err, &tex) {
 			if tex.Code == apis.GlobalTransactionNotExist {
@@ -132,7 +132,7 @@ func (tx *mysqlTx) report(commitDone bool) error {
 				tx.mc.ctx.xid, tx.mc.ctx.branchID, apis.AT, apis.PhaseOneFailed, nil)
 		}
 		if err != nil {
-			errLog.Print("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
+			log.Errorf("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
 				tx.mc.ctx.branchID, tx.mc.ctx.xid, commitDone, retry)
 		}
 		retry = retry - 1

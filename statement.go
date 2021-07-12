@@ -15,7 +15,7 @@ import (
 	"io"
 	"reflect"
 
-	"github.com/opentrx/seata-golang/v2/pkg/client/config"
+	"github.com/dk-lockdown/harmonia/pkg/client/config"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	_ "github.com/pingcap/parser/test_driver"

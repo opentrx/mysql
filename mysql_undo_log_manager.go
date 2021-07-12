@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrx/seata-golang/v2/pkg/util/log"
+	"github.com/dk-lockdown/harmonia/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
@@ -107,7 +107,7 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 		exists = true
 
 		if State(state.Int32) != Normal {
-			fmt.Printf("xid %s branch %d, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
+			log.Infof("xid %v branch %v, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
 			return nil
 		}
 

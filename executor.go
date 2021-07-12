@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrx/seata-golang/v2/pkg/apis"
-	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
-	"github.com/opentrx/seata-golang/v2/pkg/util/mysql"
-	sql2 "github.com/opentrx/seata-golang/v2/pkg/util/sql"
+	"github.com/dk-lockdown/harmonia/pkg/apis"
+	"github.com/dk-lockdown/harmonia/pkg/client/rm"
+	"github.com/dk-lockdown/harmonia/pkg/util/mysql"
+	sql2 "github.com/dk-lockdown/harmonia/pkg/util/sql"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 
