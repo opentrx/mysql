@@ -531,6 +531,12 @@ func buildRecords(meta schema.TableMeta, rows driver.Rows) *schema.TableRecords 
 				Type:  meta.AllColumns[col].DataType,
 				Value: values[i],
 			}
+			switch v := values[i].(type) {
+			case []uint8:
+				dst := make([]uint8, len(v))
+				copy(dst, v)
+				filed.Value = dst
+			}
 			if strings.ToLower(col) == strings.ToLower(meta.GetPKName()) {
 				filed.KeyType = schema.PRIMARY_KEY
 			}
