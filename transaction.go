@@ -108,7 +108,7 @@ func (tx *mysqlTx) register() (int64, error) {
 		if err == nil {
 			break
 		}
-		errLog.Print("branch register err: %v", err)
+		log.Errorf("branch register err: %v", err)
 		var tex *meta.TransactionException
 		if errors.As(err, &tex) {
 			if tex.Code == meta.TransactionExceptionCodeGlobalTransactionNotExist {
@@ -132,7 +132,7 @@ func (tx *mysqlTx) report(commitDone bool) error {
 				meta.BranchStatusPhaseoneFailed, nil)
 		}
 		if err != nil {
-			errLog.Print("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
+			log.Errorf("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
 				tx.mc.ctx.branchID, tx.mc.ctx.xid, commitDone, retry)
 		}
 		retry = retry - 1
