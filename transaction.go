@@ -39,7 +39,7 @@ func (tx *mysqlTx) Commit() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			rollBackErr := tx.Rollback()
+			rollBackErr := tx.mc.exec("ROLLBACK")
 			if rollBackErr != nil {
 				log.Error(rollBackErr)
 			}
