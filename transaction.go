@@ -40,8 +40,10 @@ func (tx *mysqlTx) Commit() (err error) {
 	if tx.mc.ctx != nil {
 		branchID, err := tx.register()
 		if err != nil {
-			rollbackErr := tx.Rollback()
-			log.Error(rollbackErr)
+			rollBackErr := tx.mc.exec("ROLLBACK")
+			if rollBackErr != nil {
+				log.Error(rollBackErr)
+			}
 			return err
 		}
 		tx.mc.ctx.branchID = branchID
@@ -108,7 +110,7 @@ func (tx *mysqlTx) register() (int64, error) {
 		if err == nil {
 			break
 		}
-		errLog.Print("branch register err: %v", err)
+		log.Errorf("branch register err: %v", err)
 		var tex *exception.TransactionException
 		if errors.As(err, &tex) {
 			if tex.Code == apis.GlobalTransactionNotExist {
@@ -132,7 +134,7 @@ func (tx *mysqlTx) report(commitDone bool) error {
 				tx.mc.ctx.xid, tx.mc.ctx.branchID, apis.AT, apis.PhaseOneFailed, nil)
 		}
 		if err != nil {
-			errLog.Print("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
+			log.Errorf("Failed to report [%d/%s] commit done [%t] Retry Countdown: %d",
 				tx.mc.ctx.branchID, tx.mc.ctx.xid, commitDone, retry)
 		}
 		retry = retry - 1
