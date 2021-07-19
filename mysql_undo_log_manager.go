@@ -107,7 +107,7 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 		exists = true
 
 		if State(state.Int32) != Normal {
-			fmt.Printf("xid %s branch %d, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
+			log.Debugf("xid %s branch %d, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
 			return nil
 		}
 
