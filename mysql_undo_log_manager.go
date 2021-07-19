@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/google/martian/log"
 	"strings"
 	"time"
 )
@@ -108,7 +109,7 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 		exists = true
 
 		if State(state.Int32) != Normal {
-			fmt.Printf("xid %s branch %d, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
+			log.Debugf("xid %s branch %d, ignore %s undo_log", xid2, branchID2, State(state.Int32).String())
 			return nil
 		}
 
@@ -143,7 +144,7 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 			tx.Rollback()
 			return errors.WithStack(err)
 		}
-		fmt.Printf("xid %s branch %d, undo_log deleted with %s", xid, branchID,
+		log.Infof("xid %s branch %d, undo_log deleted with %s", xid, branchID,
 			GlobalFinished.String())
 		tx.Commit()
 	} else {
@@ -161,7 +162,7 @@ func (manager MysqlUndoLogManager) DeleteUndoLog(conn *mysqlConn, xid string, br
 		return err
 	}
 	affectCount, _ := result.RowsAffected()
-	fmt.Printf("%d undo log deleted by xid:%s and branchID:%d", affectCount, xid, branchID)
+	log.Infof("%d undo log deleted by xid:%s and branchID:%d", affectCount, xid, branchID)
 	return nil
 }
 
