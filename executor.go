@@ -429,7 +429,7 @@ func (executor *updateExecutor) buildAfterImageSql(tableMeta schema.TableMeta, b
 	}
 	fmt.Fprintf(&b, " FROM %s ", executor.GetTableName())
 	fmt.Fprintf(&b, "WHERE `%s` IN", tableMeta.GetPKName())
-	fmt.Fprint(&b, sql2.AppendInParam(len(beforeImage.PKFields())))
+	fmt.Fprint(&b, sql2.MysqlAppendInParam(len(beforeImage.PKFields())))
 	return b.String()
 }
 
