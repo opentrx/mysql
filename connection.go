@@ -15,6 +15,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/opentrx/seata-golang/v2/pkg/client/config"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"io"
 	"net"
 	"strconv"
@@ -23,6 +26,7 @@ import (
 )
 
 const XID = "XID"
+const GlobalLock = "GlobalLock"
 
 type connCtx struct {
 	xid                string
@@ -641,6 +645,22 @@ func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []drive
 	}
 	defer mc.finish()
 
+	globalLock := false
+	val := ctx.Value(GlobalLock)
+	if val != nil {
+		globalLock = val.(bool)
+	}
+
+	if globalLock {
+		executable, err := executable(mc, query, dargs)
+		if err != nil {
+			return nil, err
+		}
+		if !executable {
+			return nil, fmt.Errorf("data resource locked by seata transaction coordinator")
+		}
+	}
+
 	return mc.Exec(query, dargs)
 }
 
@@ -694,7 +714,52 @@ func (stmt *mysqlStmt) ExecContext(ctx context.Context, args []driver.NamedValue
 	}
 	defer stmt.mc.finish()
 
+	globalLock := false
+	val := ctx.Value(GlobalLock)
+	if val != nil {
+		globalLock = val.(bool)
+	}
+
+	if globalLock {
+		executable, err := executable(stmt.mc, stmt.sql, dargs)
+		if err != nil {
+			return nil, err
+		}
+		if !executable {
+			return nil, fmt.Errorf("data resource locked by seata transaction coordinator")
+		}
+	}
+
 	return stmt.Exec(dargs)
+}
+
+func executable(mc *mysqlConn, sql string, args []driver.Value) (bool,error) {
+	parser := parser.New()
+	act, _ := parser.ParseOneStmt(sql, "", "")
+	deleteStmt, isDelete := act.(*ast.DeleteStmt)
+	if isDelete {
+		executor := &globalLockExecutor{
+			mc:          mc,
+			originalSQL: sql,
+			isUpdate:    false,
+			deleteStmt:  deleteStmt,
+			args:        args,
+		}
+		return executor.Executable(config.GetATConfig().LockRetryInterval, config.GetATConfig().LockRetryTimes)
+	}
+
+	updateStmt, isUpdate := act.(*ast.UpdateStmt)
+	if isUpdate {
+		executor := &globalLockExecutor{
+			mc:          mc,
+			originalSQL: sql,
+			isUpdate:    true,
+			updateStmt:  updateStmt,
+			args:        args,
+		}
+		return executor.Executable(config.GetATConfig().LockRetryInterval, config.GetATConfig().LockRetryTimes)
+	}
+	return true, nil
 }
 
 func (mc *mysqlConn) watchCancel(ctx context.Context) error {

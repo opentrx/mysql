@@ -46,6 +46,15 @@ type updateExecutor struct {
 	args        []driver.Value
 }
 
+type globalLockExecutor struct {
+	mc          *mysqlConn
+	originalSQL string
+	isUpdate    bool
+	deleteStmt  *ast.DeleteStmt
+	updateStmt  *ast.UpdateStmt
+	args        []driver.Value
+}
+
 func (executor *insertExecutor) GetTableName() string {
 	var sb strings.Builder
 	executor.stmt.Table.TableRefs.Left.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
@@ -466,6 +475,95 @@ func (executor *updateExecutor) buildBeforeImageSql(tableMeta schema.TableMeta) 
 func (executor *updateExecutor) getTableMeta() (schema.TableMeta, error) {
 	tableMetaCache := GetTableMetaCache(executor.mc.cfg.DBName)
 	return tableMetaCache.GetTableMeta(executor.mc, executor.GetTableName())
+}
+
+func (executor *globalLockExecutor) GetTableName() string {
+	var sb strings.Builder
+	if executor.isUpdate {
+		executor.updateStmt.TableRefs.TableRefs.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
+	} else {
+		executor.deleteStmt.TableRefs.TableRefs.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
+	}
+	return sb.String()
+}
+
+func (executor *globalLockExecutor) GetWhereCondition() string {
+	var sb strings.Builder
+	if executor.isUpdate {
+		executor.updateStmt.Where.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
+	} else {
+		executor.deleteStmt.Where.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
+	}
+	return sb.String()
+}
+
+func (executor *globalLockExecutor) buildBeforeImageSql(tableMeta schema.TableMeta) string {
+	var b strings.Builder
+	fmt.Fprint(&b, "SELECT ")
+	var i = 0
+	columnCount := len(tableMeta.Columns)
+	for _, column := range tableMeta.Columns {
+		fmt.Fprint(&b, mysql.CheckAndReplace(column))
+		i = i + 1
+		if i < columnCount {
+			fmt.Fprint(&b, ",")
+		} else {
+			fmt.Fprint(&b, " ")
+		}
+	}
+	fmt.Fprintf(&b, " FROM %s WHERE ", executor.GetTableName())
+	fmt.Fprint(&b, executor.GetWhereCondition())
+	return b.String()
+}
+
+func (executor *globalLockExecutor) getTableMeta() (schema.TableMeta, error) {
+	tableMetaCache := GetTableMetaCache(executor.mc.cfg.DBName)
+	return tableMetaCache.GetTableMeta(executor.mc, executor.GetTableName())
+}
+
+func (executor *globalLockExecutor) buildTableRecords(tableMeta schema.TableMeta) (*schema.TableRecords, error) {
+	sql := executor.buildBeforeImageSql(tableMeta)
+	argsCount := strings.Count(sql, "?")
+	rows, err := executor.mc.prepareQuery(sql, executor.args[len(executor.args)-argsCount:])
+	if err != nil {
+		return nil, err
+	}
+	return buildRecords(tableMeta, rows), nil
+}
+
+func (executor *globalLockExecutor) BeforeImage() (*schema.TableRecords, error) {
+	tableMeta, err := executor.getTableMeta()
+	if err != nil {
+		return nil, err
+	}
+	return executor.buildTableRecords(tableMeta)
+}
+
+func (executor *globalLockExecutor) Executable(lockRetryInterval time.Duration, lockRetryTimes int) (bool, error) {
+	beforeImage, err := executor.BeforeImage()
+	if err != nil {
+		return false, err
+	}
+
+	lockKeys := buildLockKey(beforeImage)
+	if lockKeys == "" {
+		return true, nil
+	} else {
+		var lockable bool
+		var err error
+		for i := 0; i < lockRetryTimes; i++ {
+			lockable, err = rm.GetResourceManager().LockQuery(context.Background(),
+				"", executor.mc.cfg.DBName, apis.AT, lockKeys )
+			if lockable && err == nil {
+				return true, nil
+			}
+			time.Sleep(lockRetryInterval)
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func appendInParam(size int) string {
