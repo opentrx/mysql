@@ -580,7 +580,7 @@ func appendInParam(size int) string {
 }
 
 func buildLockKey(lockKeyRecords *schema.TableRecords) string {
-	if lockKeyRecords.Rows == nil || len(lockKeyRecords.Rows) == 0 {
+	if lockKeyRecords == nil || lockKeyRecords.Rows == nil || len(lockKeyRecords.Rows) == 0 {
 		return ""
 	}
 
