@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dk-lockdown/harmonia/pkg/apis"
-	"github.com/dk-lockdown/harmonia/pkg/client/rm"
-	"github.com/dk-lockdown/harmonia/pkg/util/mysql"
-	sql2 "github.com/dk-lockdown/harmonia/pkg/util/sql"
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
+	"github.com/opentrx/seata-golang/v2/pkg/util/mysql"
+	sql2 "github.com/opentrx/seata-golang/v2/pkg/util/sql"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 
@@ -333,7 +333,7 @@ func (executor *selectForUpdateExecutor) Execute(lockRetryInterval time.Duration
 			var err error
 			for i := 0; i < lockRetryTimes; i++ {
 				lockable, err = rm.GetResourceManager().LockQuery(context.Background(),
-					executor.mc.ctx.xid, executor.mc.cfg.DBName, apis.AT, lockKeys )
+					executor.mc.ctx.xid, executor.mc.cfg.DBName, apis.AT, lockKeys)
 				if lockable && err == nil {
 					break
 				}
@@ -429,7 +429,7 @@ func (executor *updateExecutor) buildAfterImageSql(tableMeta schema.TableMeta, b
 	}
 	fmt.Fprintf(&b, " FROM %s ", executor.GetTableName())
 	fmt.Fprintf(&b, "WHERE `%s` IN", tableMeta.GetPKName())
-	fmt.Fprint(&b, sql2.AppendInParam(len(beforeImage.PKFields())))
+	fmt.Fprint(&b, sql2.MysqlAppendInParam(len(beforeImage.PKFields())))
 	return b.String()
 }
 

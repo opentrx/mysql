@@ -2,11 +2,12 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
-	"github.com/dk-lockdown/harmonia/pkg/apis"
-	"github.com/dk-lockdown/harmonia/pkg/client/base/model"
-	"github.com/dk-lockdown/harmonia/pkg/util/log"
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/base/model"
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 )
 
 var (
@@ -17,7 +18,7 @@ var dataSourceManager DataSourceManager
 
 type DataSourceManager struct {
 	ResourceCache map[string]*connector
-	connections map[string]*mysqlConn
+	connections   map[string]*mysqlConn
 	sync.Mutex
 }
 
@@ -64,11 +65,14 @@ func (resourceManager DataSourceManager) GetConnection(resourceID string) *mysql
 	return conn
 }
 
-func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, request *apis.BranchCallbackMessage) (apis.BranchSession_BranchStatus, error) {
+func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, request *apis.BranchCommitRequest) (*apis.BranchCommitResponse, error) {
 	db := resourceManager.ResourceCache[request.ResourceID]
 	if db == nil {
 		log.Errorf("Data resource is not exist, resourceID: %s", request.ResourceID)
-		return request.Status, nil
+		return &apis.BranchCommitResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    fmt.Sprintf("Data resource is not exist, resourceID: %s", request.ResourceID),
+		}, nil
 	}
 
 	//todo 改为异步批量操作
@@ -76,24 +80,36 @@ func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, reque
 	conn := resourceManager.GetConnection(request.ResourceID)
 
 	if conn == nil || !conn.IsValid() {
-		log.Error("connection is not valid")
-		return apis.PhaseTwoCommitFailed, nil
+		return &apis.BranchCommitResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    "Connection is not valid",
+		}, nil
 	}
 	err := undoLogManager.DeleteUndoLog(conn, request.XID, request.BranchID)
 	if err != nil {
 		log.Errorf("[stacktrace]branchCommit failed. xid:[%s], branchID:[%d], resourceID:[%s], branchType:[%d], applicationData:[%v]",
 			request.XID, request.BranchID, request.ResourceID, request.BranchType, request.ApplicationData)
 		log.Error(err)
-		return apis.PhaseTwoCommitFailed, nil
+		return &apis.BranchCommitResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    err.Error(),
+		}, nil
 	}
-	return apis.PhaseTwoCommitted, nil
+	return &apis.BranchCommitResponse{
+		ResultCode:   apis.ResultCodeSuccess,
+		XID:          request.XID,
+		BranchID:     request.BranchID,
+		BranchStatus: apis.PhaseTwoCommitted,
+	}, nil
 }
 
-func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, request *apis.BranchCallbackMessage) (apis.BranchSession_BranchStatus, error) {
+func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, request *apis.BranchRollbackRequest) (*apis.BranchRollbackResponse, error) {
 	db := resourceManager.ResourceCache[request.ResourceID]
 	if db == nil {
-		log.Errorf("Data resource is not exist, resourceID: %s", request.ResourceID)
-		return request.Status, nil
+		return &apis.BranchRollbackResponse{
+			ResultCode: apis.ResultCodeFailed,
+			Message:    fmt.Sprintf("Data resource is not exist, resourceID: %s", request.ResourceID),
+		}, nil
 	}
 
 	//todo 使用前镜数据覆盖当前数据
@@ -102,7 +118,12 @@ func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, req
 	defer conn.Close()
 	if err != nil {
 		log.Error(err)
-		return apis.PhaseTwoRollbackFailed, nil
+		return &apis.BranchRollbackResponse{
+			ResultCode:   apis.ResultCodeSuccess,
+			XID:          request.XID,
+			BranchID:     request.BranchID,
+			BranchStatus: apis.PhaseTwoRollbackFailedRetryable,
+		}, nil
 	}
 	c := conn.(*mysqlConn)
 	err = undoLogManager.Undo(c, request.XID, request.BranchID, db.cfg.DBName)
@@ -110,13 +131,23 @@ func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, req
 		log.Errorf("[stacktrace]branchRollback failed. xid:[%s], branchID:[%d], resourceID:[%s], branchType:[%d], applicationData:[%v]",
 			request.XID, request.BranchID, request.ResourceID, request.BranchType, request.ApplicationData)
 		log.Error(err)
-		return apis.PhaseTwoRollbackFailed, nil
+		return &apis.BranchRollbackResponse{
+			ResultCode:   apis.ResultCodeSuccess,
+			XID:          request.XID,
+			BranchID:     request.BranchID,
+			BranchStatus: apis.PhaseTwoRollbackFailedRetryable,
+		}, nil
 	}
-	return apis.PhaseTwoRolledBack, nil
+	return &apis.BranchRollbackResponse{
+		ResultCode:   apis.ResultCodeSuccess,
+		XID:          request.XID,
+		BranchID:     request.BranchID,
+		BranchStatus: apis.PhaseTwoRolledBack,
+	}, nil
 }
 
 func (resourceManager DataSourceManager) RegisterResource(resource model.Resource) {
-	if connector,ok := resource.(*connector); ok {
+	if connector, ok := resource.(*connector); ok {
 		resourceManager.ResourceCache[resource.GetResourceID()] = connector
 	}
 }

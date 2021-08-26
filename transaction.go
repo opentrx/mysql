@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dk-lockdown/harmonia/pkg/apis"
-	"github.com/dk-lockdown/harmonia/pkg/client/base/exception"
-	"github.com/dk-lockdown/harmonia/pkg/client/config"
-	"github.com/dk-lockdown/harmonia/pkg/client/rm"
-	"github.com/dk-lockdown/harmonia/pkg/util/log"
+	"github.com/opentrx/seata-golang/v2/pkg/apis"
+	"github.com/opentrx/seata-golang/v2/pkg/client/base/exception"
+	"github.com/opentrx/seata-golang/v2/pkg/client/config"
+	"github.com/opentrx/seata-golang/v2/pkg/client/rm"
+	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
