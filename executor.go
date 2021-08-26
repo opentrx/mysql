@@ -342,7 +342,7 @@ func (executor *selectForUpdateExecutor) Execute(lockRetryInterval time.Duration
 			var err error
 			for i := 0; i < lockRetryTimes; i++ {
 				lockable, err = rm.GetResourceManager().LockQuery(context.Background(),
-					executor.mc.ctx.xid, executor.mc.cfg.DBName, apis.AT, lockKeys )
+					executor.mc.ctx.xid, executor.mc.cfg.DBName, apis.AT, lockKeys)
 				if lockable && err == nil {
 					break
 				}

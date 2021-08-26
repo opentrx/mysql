@@ -10,15 +10,11 @@ import (
 	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 )
 
-var (
-	DBKEYS_SPLIT_CHAR = ","
-)
-
 var dataSourceManager DataSourceManager
 
 type DataSourceManager struct {
 	ResourceCache map[string]*connector
-	connections map[string]*mysqlConn
+	connections   map[string]*mysqlConn
 	sync.Mutex
 }
 
@@ -81,8 +77,8 @@ func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, reque
 
 	if conn == nil || !conn.IsValid() {
 		return &apis.BranchCommitResponse{
-			ResultCode:    apis.ResultCodeFailed,
-			Message:       "Connection is not valid",
+			ResultCode: apis.ResultCodeFailed,
+			Message:    "Connection is not valid",
 		}, nil
 	}
 	err := undoLogManager.DeleteUndoLog(conn, request.XID, request.BranchID)
@@ -91,8 +87,8 @@ func (resourceManager DataSourceManager) BranchCommit(ctx context.Context, reque
 			request.XID, request.BranchID, request.ResourceID, request.BranchType, request.ApplicationData)
 		log.Error(err)
 		return &apis.BranchCommitResponse{
-			ResultCode:    apis.ResultCodeFailed,
-			Message:       err.Error(),
+			ResultCode: apis.ResultCodeFailed,
+			Message:    err.Error(),
 		}, nil
 	}
 	return &apis.BranchCommitResponse{
@@ -147,7 +143,7 @@ func (resourceManager DataSourceManager) BranchRollback(ctx context.Context, req
 }
 
 func (resourceManager DataSourceManager) RegisterResource(resource model.Resource) {
-	if connector,ok := resource.(*connector); ok {
+	if connector, ok := resource.(*connector); ok {
 		resourceManager.ResourceCache[resource.GetResourceID()] = connector
 	}
 }
