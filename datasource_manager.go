@@ -10,10 +10,6 @@ import (
 	"github.com/opentrx/seata-golang/v2/pkg/util/log"
 )
 
-var (
-	DBKEYS_SPLIT_CHAR = ","
-)
-
 var dataSourceManager DataSourceManager
 
 type DataSourceManager struct {
