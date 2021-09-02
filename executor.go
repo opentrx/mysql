@@ -17,7 +17,7 @@ import (
 )
 
 import (
-	"github.com/opentrx/mysql/schema"
+	"github.com/slowmoon/mysql/schema"
 )
 
 type insertExecutor struct {
