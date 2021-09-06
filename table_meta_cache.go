@@ -131,7 +131,7 @@ func GetColumns(conn *mysqlConn, dbName, tableName string) ([]schema.ColumnMeta,
 	result := make([]schema.ColumnMeta, 0)
 
 	var tableCat, tScheme, tName, columnName, dataType, isNullable, remark, colDefault, colKey, extra sql.NullString
-	var columnSize, decimalDigits, numPreRadix, charOctetLength, ordinalPosition sql.NullInt32
+	var columnSize, decimalDigits, numPreRadix, charOctetLength, ordinalPosition sql.NullInt64
 
 	vals := make([]driver.Value, 15)
 	dest := []interface{}{
@@ -162,9 +162,9 @@ func GetColumns(conn *mysqlConn, dbName, tableName string) ([]schema.ColumnMeta,
 		col.ColumnName = strings.Trim(columnName.String, "` ")
 		col.DataTypeName = dataType.String
 		col.DataType = GetSqlDataType(dataType.String)
-		col.ColumnSize = columnSize.Int32
-		col.DecimalDigits = decimalDigits.Int32
-		col.NumPrecRadix = numPreRadix.Int32
+		col.ColumnSize = columnSize.Int64
+		col.DecimalDigits = decimalDigits.Int64
+		col.NumPrecRadix = numPreRadix.Int64
 		col.IsNullable = isNullable.String
 		if strings.ToLower(isNullable.String) == "yes" {
 			col.Nullable = 1
@@ -175,8 +175,8 @@ func GetColumns(conn *mysqlConn, dbName, tableName string) ([]schema.ColumnMeta,
 		col.ColumnDef = colDefault.String
 		col.SqlDataType = 0
 		col.SqlDatetimeSub = 0
-		col.CharOctetLength = charOctetLength.Int32
-		col.OrdinalPosition = ordinalPosition.Int32
+		col.CharOctetLength = charOctetLength.Int64
+		col.OrdinalPosition = ordinalPosition.Int64
 		col.IsAutoIncrement = extra.String
 
 		result = append(result, col)

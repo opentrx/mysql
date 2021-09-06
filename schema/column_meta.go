@@ -7,16 +7,16 @@ type ColumnMeta struct {
 	ColumnName      string
 	DataType        int32
 	DataTypeName    string
-	ColumnSize      int32
-	DecimalDigits   int32
-	NumPrecRadix    int32
+	ColumnSize      int64
+	DecimalDigits   int64
+	NumPrecRadix    int64
 	Nullable        int32
 	Remarks         string
 	ColumnDef       string
 	SqlDataType     int32
 	SqlDatetimeSub  int32
-	CharOctetLength int32
-	OrdinalPosition int32
+	CharOctetLength int64
+	OrdinalPosition int64
 	IsNullable      string
 	IsAutoIncrement string
 }
