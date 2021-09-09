@@ -16,7 +16,7 @@ import (
 
 var EXPIRE_TIME = 15 * time.Minute
 
-var tableMetaCaches map[string]*TableMetaCache = make(map[string]*TableMetaCache, 0)
+var tableMetaCaches = make(map[string]*TableMetaCache, 0)
 
 type TableMetaCache struct {
 	tableMetaCache *cache.Cache
