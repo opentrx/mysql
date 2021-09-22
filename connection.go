@@ -733,7 +733,7 @@ func (stmt *mysqlStmt) ExecContext(ctx context.Context, args []driver.NamedValue
 	return stmt.Exec(dargs)
 }
 
-func executable(mc *mysqlConn, sql string, args []driver.Value) (bool,error) {
+func executable(mc *mysqlConn, sql string, args []driver.Value) (bool, error) {
 	parser := parser.New()
 	act, _ := parser.ParseOneStmt(sql, "", "")
 	deleteStmt, isDelete := act.(*ast.DeleteStmt)
