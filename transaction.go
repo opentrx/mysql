@@ -10,6 +10,7 @@ package mysql
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -104,8 +105,23 @@ func (tx *mysqlTx) register() (int64, error) {
 	var branchID int64
 	var err error
 	for retryCount := 0; retryCount < config.GetATConfig().LockRetryTimes; retryCount++ {
+		itemsBuffer := tx.mc.ctx.sqlUndoItemsBuffer
+		skipCheckLock := true
+		var applicationData []byte
+		for _, undoLog := range itemsBuffer {
+			if undoLog.BeforeImage != nil && len(undoLog.BeforeImage.Rows) != 0 {
+				skipCheckLock = false
+				break
+			}
+		}
+		if skipCheckLock {
+			applicationDataMap := map[string]bool{
+				"skipCheckLock": skipCheckLock,
+			}
+			applicationData, _ = json.Marshal(applicationDataMap)
+		}
 		branchID, err = rm.GetResourceManager().BranchRegister(context.Background(),
-			tx.mc.ctx.xid, tx.mc.cfg.DBName, apis.AT, nil,
+			tx.mc.ctx.xid, tx.mc.cfg.DBName, apis.AT, applicationData,
 			strings.Join(tx.mc.ctx.lockKeys, ";"))
 		if err == nil {
 			break
