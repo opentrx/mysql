@@ -122,7 +122,7 @@ func (tx *mysqlTx) register() (int64, error) {
 		}
 		branchID, err = rm.GetResourceManager().BranchRegister(context.Background(),
 			tx.mc.ctx.xid, tx.mc.cfg.DBName, apis.AT, applicationData,
-			strings.Join(tx.mc.ctx.lockKeys, ";"))
+			strings.Join(tx.mc.ctx.lockKeys, ";"), true)
 		if err == nil {
 			break
 		}
