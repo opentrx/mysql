@@ -135,7 +135,8 @@ func convertPbField(pbField *PbField) *schema.Field {
 
 func convertRow(row *schema.Row) *PbRow {
 	pbFields := make([]*PbField, 0)
-	for _, field := range row.Fields {
+	for  i := 0; i < len(row.Fields); i++ {
+		field := row.Fields[i]
 		pbField := convertField(field)
 		pbFields = append(pbFields, pbField)
 	}
@@ -147,7 +148,8 @@ func convertRow(row *schema.Row) *PbRow {
 
 func convertPbRow(pbRow *PbRow) *schema.Row {
 	fields := make([]*schema.Field, 0)
-	for _, pbField := range pbRow.Fields {
+	for  i := 0; i < len(pbRow.Fields); i++ {
+		pbField := pbRow.Fields[i]
 		field := convertPbField(pbField)
 		fields = append(fields, field)
 	}
@@ -157,7 +159,8 @@ func convertPbRow(pbRow *PbRow) *schema.Row {
 
 func convertTableRecords(records *schema.TableRecords) *PbTableRecords {
 	pbRows := make([]*PbRow, 0)
-	for _, row := range records.Rows {
+	for i := 0; i < len(records.Rows); i++ {
+		row := records.Rows[i]
 		pbRow := convertRow(row)
 		pbRows = append(pbRows, pbRow)
 	}
@@ -170,7 +173,8 @@ func convertTableRecords(records *schema.TableRecords) *PbTableRecords {
 
 func convertPbTableRecords(pbRecords *PbTableRecords) *schema.TableRecords {
 	rows := make([]*schema.Row, 0)
-	for _, pbRow := range pbRecords.Rows {
+	for i := 0; i < len(pbRecords.Rows); i++ {
+		pbRow := pbRecords.Rows[i]
 		row := convertPbRow(pbRow)
 		rows = append(rows, row)
 	}
@@ -216,7 +220,8 @@ func convertPbSqlUndoLog(pbSqlUndoLog *PbSqlUndoLog) *sqlUndoLog {
 
 func convertBranchSqlUndoLog(branchUndoLog *branchUndoLog) *PbBranchUndoLog {
 	sqlUndoLogs := make([]*PbSqlUndoLog, 0)
-	for _, sqlUndoLog := range branchUndoLog.SqlUndoLogs {
+	for i := 0; i < len(branchUndoLog.SqlUndoLogs); i++ {
+		sqlUndoLog := branchUndoLog.SqlUndoLogs[i]
 		pbSqlUndoLog := convertSqlUndoLog(sqlUndoLog)
 		sqlUndoLogs = append(sqlUndoLogs, pbSqlUndoLog)
 	}
@@ -230,8 +235,9 @@ func convertBranchSqlUndoLog(branchUndoLog *branchUndoLog) *PbBranchUndoLog {
 
 func convertPbBranchSqlUndoLog(pbBranchUndoLog *PbBranchUndoLog) *branchUndoLog {
 	sqlUndoLogs := make([]*sqlUndoLog, 0)
-	for _, sqlUndoLog := range pbBranchUndoLog.SqlUndoLogs {
-		sqlUndoLog := convertPbSqlUndoLog(sqlUndoLog)
+	for i := 0; i < len(pbBranchUndoLog.SqlUndoLogs); i++ {
+		pbSqlUndoLog := pbBranchUndoLog.SqlUndoLogs[i]
+		sqlUndoLog := convertPbSqlUndoLog(pbSqlUndoLog)
 		sqlUndoLogs = append(sqlUndoLogs, sqlUndoLog)
 	}
 	branchUndoLog := &branchUndoLog{
