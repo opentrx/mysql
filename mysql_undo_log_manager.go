@@ -118,9 +118,11 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 	}
 	rows.Close()
 
-	for _, branchUndoLog := range undoLogs {
+	for i := len(undoLogs); i > 0; i-- {
+		branchUndoLog := undoLogs[i]
 		sqlUndoLogs := branchUndoLog.SqlUndoLogs
-		for _, sqlUndoLog := range sqlUndoLogs {
+		for j := len(sqlUndoLogs); i > 0; j-- {
+			sqlUndoLog := sqlUndoLogs[j]
 			tableMeta, err := GetTableMetaCache(conn.cfg.DBName).GetTableMeta(conn, sqlUndoLog.TableName)
 			if err != nil {
 				tx.Rollback()
