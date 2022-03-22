@@ -362,6 +362,7 @@ func (executor *selectForUpdateExecutor) getTableMeta() (schema.TableMeta, error
 }
 
 func (executor *updateExecutor) Execute() (driver.Result, error) {
+	var afterImage *schema.TableRecords
 	beforeImage, err := executor.BeforeImage()
 	if err != nil {
 		return nil, err
@@ -370,10 +371,18 @@ func (executor *updateExecutor) Execute() (driver.Result, error) {
 	if err != nil {
 		return result, err
 	}
-	afterImage, err := executor.AfterImage(beforeImage)
-	if err != nil {
-		return nil, err
+
+	// https://github.com/opentrx/mysql/issues/3
+	// If rowAffect is 0, no row is updated.
+	if rowAffect, err := result.RowsAffected(); err == nil && rowAffect == 0 {
+		afterImage = beforeImage
+	} else {
+		afterImage, err = executor.AfterImage(beforeImage)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	executor.PrepareUndoLog(beforeImage, afterImage)
 	return result, err
 }
