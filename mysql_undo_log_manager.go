@@ -17,7 +17,7 @@ const (
 	InsertUndoLogSql         = `INSERT INTO undo_log (branch_id, xid, context, rollback_info, log_status, log_created, 
 		log_modified) VALUES (?, ?, ?, ?, ?, now(), now())`
 	SelectUndoLogSql = `SELECT branch_id, xid, context, rollback_info, log_status FROM undo_log 
-        WHERE xid = ? AND branch_id = ? FOR UPDATE`
+        WHERE xid = ? AND branch_id = ? ORDER BY log_created DESC FOR UPDATE`
 )
 
 type State byte
@@ -118,10 +118,9 @@ func (manager MysqlUndoLogManager) Undo(conn *mysqlConn, xid string, branchID in
 	}
 	rows.Close()
 
-	for i := len(undoLogs); i > 0; i-- {
-		branchUndoLog := undoLogs[i]
+	for _, branchUndoLog := range undoLogs {
 		sqlUndoLogs := branchUndoLog.SqlUndoLogs
-		for j := len(sqlUndoLogs); i > 0; j-- {
+		for j := len(sqlUndoLogs) - 1; j >= 0; j-- {
 			sqlUndoLog := sqlUndoLogs[j]
 			tableMeta, err := GetTableMetaCache(conn.cfg.DBName).GetTableMeta(conn, sqlUndoLog.TableName)
 			if err != nil {

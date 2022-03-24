@@ -133,7 +133,8 @@ func (executor MysqlUndoExecutor) Execute(conn *mysqlConn) error {
 	// UPDATE a SET x=?, y=?, z=? WHERE pk = ?
 	// DELETE FROM a WHERE pk = ?
 
-	for _, row := range undoRows.Rows {
+	for i := len(undoRows.Rows) - 1; i >= 0; i-- {
+		row := undoRows.Rows[i]
 		var args = make([]driver.Value, 0)
 		var pkValue interface{}
 
